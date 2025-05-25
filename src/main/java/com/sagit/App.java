@@ -1,4 +1,4 @@
-package dev.sagit;
+package com.sagit;
 
 public class App 
 {
