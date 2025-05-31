@@ -11,7 +11,7 @@ import com.sagit.commands.*;
     mixinStandardHelpOptions = true,
     version = "Sagit 0.1",
     subcommands = {
-        InitCommand.class
+        SagitInit.class
     }
 )
 
