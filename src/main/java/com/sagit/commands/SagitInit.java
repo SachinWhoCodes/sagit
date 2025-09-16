@@ -180,3 +180,6 @@ public class SagitInit implements Callable<Git> {
         }
     }
 }
+
+
+// checked

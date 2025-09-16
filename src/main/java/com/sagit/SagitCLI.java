@@ -25,3 +25,6 @@ public class SagitCLI implements Runnable{
         System.exit(exitCode);
     }
 }
+
+
+// checked
