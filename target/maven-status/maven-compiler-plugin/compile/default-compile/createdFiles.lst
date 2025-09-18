@@ -1,2 +1,4 @@
 com/sagit/commands/SagitInit.class
+com/sagit/commands/SagitAdd.class
+com/sagit/commands/SagitCommit.class
 com/sagit/SagitCLI.class

@@ -10,16 +10,18 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.Callable;
 
 @Command(
     name = "init",
-    description = "Initializes the .sagit and .git repository.",
+    description = "Initializes the .sagit and/or .git repository based on existing setup.",
     mixinStandardHelpOptions = true
 )
 public class SagitInit implements Callable<Git> {
 
-    // Setting up options (picocli)
     @Option(
         names = {"-q", "--quiet"},
         description = "Be quiet, only report errors"
@@ -76,7 +78,6 @@ public class SagitInit implements Callable<Git> {
     )
     private String shared;
 
-    // parameters (picocli feature)
     @Parameters(
         index = "0",
         paramLabel = "<directory>",
@@ -85,101 +86,117 @@ public class SagitInit implements Callable<Git> {
     )
     private File directory;
 
-
-
-    // call function that returns Git object
     @Override
-    public Git call() throws Exception{
+    public Git call() throws Exception {
+        File baseDir = (directory != null) ? directory : new File(".");
+        File gitDirPath = (this.gitDir != null) ? this.gitDir : new File(baseDir, ".git");
+        File sagitDirPath = new File(baseDir, ".sagit");
 
-        // create the Jgit Init object to configure
+        if (!quiet) {
+            System.out.println("Checking directory: " + baseDir.getAbsolutePath());
+        }
+
+        // Check if .git already exists
+        boolean gitExists = gitDirPath.exists() && gitDirPath.isDirectory();
+        if (!quiet) {
+            System.out.println(".git exists: " + gitExists);
+        }
+
         InitCommand init = new InitCommand();
-
-        // The directory to initialize the repository in (defaults to current directory)
-        if(directory != null){
-            init.setDirectory(directory);
-        }
-
-        // set bare
+        init.setDirectory(baseDir);
         init.setBare(bare);
-
-
-        // Set git directory
-        if(gitDir != null){
-            init.setGitDir(gitDir);
+        if (this.gitDir != null) {
+            init.setGitDir(this.gitDir);
         }
-
-
-        // Set initial branch
-        if(initialBranch != null){
-            try{
+        if (initialBranch != null) {
+            try {
                 init.setInitialBranch(initialBranch);
-            } catch(InvalidRefNameException e){
-                if(!quiet){
-                    System.err.println("Error: invalid branch name '" + initialBranch + "' : " + e.getMessage() );
+            } catch (InvalidRefNameException e) {
+                if (!quiet) {
+                    System.err.println("Error: invalid branch name '" + initialBranch + "' : " + e.getMessage());
                 }
                 throw e;
             }
         }
 
-
-        // Template directory, as Jgit does not support template directory, we are just showing a message to let the user know
-        if(templateDirectory != null){
-            if(!quiet){
-                System.err.println("Warning: Sagit uses JGIT internally to manage git functionality and JGit InitCommand does not support --template. " +"You may need to manually copy templates to the .git directory.");
+        if (templateDirectory != null) {
+            if (!quiet) {
+                System.err.println("Warning: Sagit uses JGIT internally and JGit InitCommand does not support --template. " +
+                                   "You may need to manually copy templates to the .git directory.");
             }
         }
 
-
-        // Handle object format (not directly supported by InitCommand)
         if (objectFormat != null) {
             if (!objectFormat.equals("sha1") && !objectFormat.equals("sha256")) {
                 if (!quiet) {
-                    System.err.println("Error: Unsupported object format '" + objectFormat + "'. " + "Supported: 'sha1', 'sha256'");
+                    System.err.println("Error: Unsupported object format '" + objectFormat + "'. Supported: 'sha1', 'sha256'");
                 }
                 throw new IllegalArgumentException("Unsupported object format: " + objectFormat);
             }
             if (!quiet) {
-                System.err.println("Warning: Sagit uses JGIT internally to manage git functionality and JGit InitCommand does not fully support --object-format. " + "Default is 'sha1'. For 'sha256', additional config may be needed post-init.");
+                System.err.println("Warning: JGit InitCommand does not fully support --object-format. Default is 'sha1'. For 'sha256', additional config may be needed post-init.");
             }
         }
 
-        // Handle ref format (not directly supported by InitCommand)
         if (refFormat != null) {
             if (!refFormat.equals("files")) {
                 if (!quiet) {
-                    System.err.println("Error: Unsupported ref format '" + refFormat + "'. " +
-                                       "Supported: 'files'");
+                    System.err.println("Error: Unsupported ref format '" + refFormat + "'. Supported: 'files'");
                 }
                 throw new IllegalArgumentException("Unsupported ref format: " + refFormat);
             }
             if (!quiet) {
-                System.err.println("Warning: Sagit uses JGIT internally to manage git functionality and JGit InitCommand does not support --ref-format. " + "Default is 'files'.");
+                System.err.println("Warning: JGit InitCommand does not support --ref-format. Default is 'files'.");
             }
         }
 
-        // Handle shared (not directly supported by InitCommand)
         if (shared != null && !shared.equals("false")) {
             if (!quiet) {
-                System.err.println("Warning: Sagit uses JGIT internally to manage git functionality and JGit InitCommand does not support --shared. " + "You may need to manually configure permissions post-init.");
+                System.err.println("Warning: JGit InitCommand does not support --shared. You may need to manually configure permissions post-init.");
             }
         }
 
-
-        // Final execution
-        try{
-            Git git = init.call();
-            if(!quiet){
-                System.out.println("Initialized " + (bare ? "bare " : "") + "Git repository in " + (directory != null ? directory.getAbsolutePath() : new File(".").getAbsolutePath()));
+        Git git = null;
+        if (!gitExists) {
+            // Initialize .git if it doesn't exist
+            try {
+                git = init.call();
+                if (!quiet) {
+                    System.out.println("Initialized Git repository in " + baseDir.getAbsolutePath());
+                }
+            } catch (GitAPIException e) {
+                if (!quiet) {
+                    System.err.println("Error initializing .git: " + e.getMessage());
+                }
+                throw e;
             }
-            return git;
-        } catch(GitAPIException e){
-            if(!quiet){
-                System.err.println("Error initializing repository: " + e.getMessage());
+        } else {
+            if (!quiet) {
+                System.out.println("Existing .git found in " + baseDir.getAbsolutePath() + ". Skipping Git initialization.");
+            }
+        }
+
+        // Initialize .sagit directory
+        try {
+            if (!sagitDirPath.exists()) {
+                Files.createDirectories(sagitDirPath.toPath());
+                Path configPath = sagitDirPath.toPath().resolve("config.txt");
+                Files.writeString(configPath, "Sagit tracking configuration initialized on " + java.time.LocalDateTime.now());
+                if (!quiet) {
+                    System.out.println("Initialized .sagit directory in " + baseDir.getAbsolutePath());
+                }
+            } else {
+                if (!quiet) {
+                    System.out.println("Existing .sagit found in " + baseDir.getAbsolutePath() + ". Skipping .sagit initialization.");
+                }
+            }
+        } catch (IOException e) {
+            if (!quiet) {
+                System.err.println("Error initializing .sagit: " + e.getMessage());
             }
             throw e;
         }
+
+        return git; // Return null if .git wasn't initialized, or the Git object if it was
     }
 }
-
-
-// checked

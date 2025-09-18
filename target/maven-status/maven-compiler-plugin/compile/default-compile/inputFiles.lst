@@ -1,2 +1,4 @@
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/SagitInit.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/SagitCLI.java
+/home/sachin/Programming/sagit/src/main/java/com/sagit/commands/SagitAdd.java
+/home/sachin/Programming/sagit/src/main/java/com/sagit/commands/SagitCommit.java
