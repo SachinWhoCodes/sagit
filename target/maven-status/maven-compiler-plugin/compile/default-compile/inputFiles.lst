@@ -1,4 +1,13 @@
-/home/sachin/Programming/sagit/src/main/java/com/sagit/commands/SagitInit.java
-/home/sachin/Programming/sagit/src/main/java/com/sagit/SagitCLI.java
-/home/sachin/Programming/sagit/src/main/java/com/sagit/commands/SagitAdd.java
-/home/sachin/Programming/sagit/src/main/java/com/sagit/commands/SagitCommit.java
+D:\sagit\src\main\java\com\sagit\commands\DiffSemanticCommand.java
+D:\sagit\src\main\java\com\sagit\commands\hooks\CommitMsgHookCommand.java
+D:\sagit\src\main\java\com\sagit\commands\hooks\HookCommand.java
+D:\sagit\src\main\java\com\sagit\commands\hooks\PostCommitHookCommand.java
+D:\sagit\src\main\java\com\sagit\commands\hooks\PrepareCommitMsgHookCommand.java
+D:\sagit\src\main\java\com\sagit\commands\MetaShowCommand.java
+D:\sagit\src\main\java\com\sagit\commands\SetupCommand.java
+D:\sagit\src\main\java\com\sagit\git\GitService.java
+D:\sagit\src\main\java\com\sagit\meta\MetaRecord.java
+D:\sagit\src\main\java\com\sagit\meta\MetaStore.java
+D:\sagit\src\main\java\com\sagit\SagitCLI.java
+D:\sagit\src\main\java\com\sagit\semantic\JavaSemanticAnalyzer.java
+D:\sagit\src\main\java\com\sagit\utils\FS.java
