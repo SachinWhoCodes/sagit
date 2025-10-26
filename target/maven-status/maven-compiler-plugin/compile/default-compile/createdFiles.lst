@@ -2,7 +2,9 @@ com/sagit/commands/hooks/PrepareCommitMsgHookCommand.class
 com/sagit/semantic/JavaSemanticAnalyzer$Stats.class
 com/sagit/commands/hooks/CommitMsgHookCommand.class
 com/sagit/commands/hooks/PostCommitHookCommand$1.class
+com/sagit/commands/DescribeCommand.class
 com/sagit/semantic/JavaSemanticAnalyzer.class
+com/sagit/commands/ImpactedCommand.class
 com/sagit/commands/hooks/CommitMsgHookCommand$1.class
 com/sagit/commands/SetupCommand.class
 com/sagit/utils/FS.class
@@ -10,6 +12,7 @@ com/sagit/meta/MetaStore.class
 com/sagit/commands/DiffSemanticCommand.class
 com/sagit/SagitCLI.class
 com/sagit/commands/hooks/PostCommitHookCommand.class
+com/sagit/commands/DescribeCommand$1.class
 com/sagit/git/GitService.class
 com/sagit/meta/MetaRecord.class
 com/sagit/utils/FS$SagitJarLocator.class

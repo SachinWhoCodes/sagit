@@ -4,7 +4,7 @@ import com.sagit.git.GitService;
 import com.sagit.meta.MetaRecord;
 import com.sagit.meta.MetaStore;
 import com.sagit.semantic.JavaSemanticAnalyzer;
-import com.sagit.utils.FS; // change to com.sagit.util.FS if that’s your package
+import com.sagit.utils.FS; // change if your utils pkg differs
 
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.lib.ObjectId;
@@ -24,12 +24,9 @@ public class PostCommitHookCommand implements Runnable {
     @Override public void run() {
         try (GitService gs = GitService.openFromWorkingDir()) {
             RevCommit head = gs.headCommit();
-            if (head == null) {
-                System.out.println("[sagit] post-commit: no HEAD commit yet");
-                return;
-            }
+            if (head == null) return;
 
-            // Use zeroId to trigger EmptyTreeIterator for first commit
+            // First-commit safe parent handling
             RevCommit parent = head.getParentCount() > 0 ? head.getParent(0) : null;
             ObjectId aTree = (parent == null) ? ObjectId.zeroId() : parent.getTree();
             ObjectId bTree = head.getTree();
@@ -52,14 +49,11 @@ public class PostCommitHookCommand implements Runnable {
                     default     -> filesModified++;
                 }
 
-                String path = (de.getChangeType() == DiffEntry.ChangeType.DELETE)
-                        ? de.getOldPath() : de.getNewPath();
-
+                String path = de.getChangeType() == DiffEntry.ChangeType.DELETE ? de.getOldPath() : de.getNewPath();
                 if (path != null && path.endsWith(".java")) {
-                    byte[] ob = (de.getOldId() != null && de.getOldId().toObjectId() != null)
-                            ? gs.loadBlob(de.getOldId().toObjectId()) : null;
-                    byte[] nb = (de.getNewId() != null && de.getNewId().toObjectId() != null)
-                            ? gs.loadBlob(de.getNewId().toObjectId()) : null;
+                    // GUARDED loads – skip zero/absent blobs
+                    byte[] ob = loadIfPresent(gs, de, true);
+                    byte[] nb = loadIfPresent(gs, de, false);
 
                     var os = analyzer.analyze(ob == null ? "" : new String(ob));
                     var ns = analyzer.analyze(nb == null ? "" : new String(nb));
@@ -82,13 +76,27 @@ public class PostCommitHookCommand implements Runnable {
             rec.summary   = summary;
 
             Path root = FS.repoRoot();
-            Files.createDirectories(root.resolve(".sagit"));
+            Files.createDirectories(root.resolve(".sagit")); // ensure folder
             new MetaStore(root.resolve(".sagit/meta.jsonl")).append(rec);
 
             System.out.println("[sagit] post-commit: metadata appended");
         } catch (Exception e) {
-            // Log the full stack so it shows up in .sagit/hook.log
+            // Show cause in .sagit/hook.log so we can diagnose if anything else happens
             e.printStackTrace();
         }
+    }
+
+    /** Return blob bytes for the selected side, or null if the object id is zero/absent. */
+    private static byte[] loadIfPresent(GitService gs, DiffEntry de, boolean oldSide) throws Exception {
+        var abbr = oldSide ? de.getOldId() : de.getNewId();
+        if (abbr == null) return null;
+        ObjectId oid;
+        try {
+            oid = abbr.toObjectId();
+        } catch (IllegalArgumentException ex) {
+            return null; // invalid/abbrev id
+        }
+        if (oid == null || ObjectId.zeroId().equals(oid)) return null;
+        return gs.loadBlob(oid);
     }
 }

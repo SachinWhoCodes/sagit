@@ -15,6 +15,8 @@ import picocli.CommandLine;
                 SetupCommand.class,
                 DiffSemanticCommand.class,
                 MetaShowCommand.class,
+                com.sagit.commands.DescribeCommand.class,
+                com.sagit.commands.ImpactedCommand.class,
                 HookCommand.class
         }
 )

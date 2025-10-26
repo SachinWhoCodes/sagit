@@ -1,5 +1,7 @@
 /home/sachin/Programming/sagit/src/main/java/com/sagit/SagitCLI.java
+/home/sachin/Programming/sagit/src/main/java/com/sagit/commands/DescribeCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/DiffSemanticCommand.java
+/home/sachin/Programming/sagit/src/main/java/com/sagit/commands/ImpactedCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/MetaShowCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/SetupCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/hooks/CommitMsgHookCommand.java
