@@ -24,15 +24,13 @@ public class PrepareCommitMsgHookCommand implements Runnable {
     @Override public void run() {
         try {
             String current = Files.exists(msgFile) ? Files.readString(msgFile) : "";
-            if (hasMeaningfulContent(current)) return; // don't overwrite templates or real text
+            if (hasMeaningfulContent(current)) return; // don't override user's text
+
+            int add=0, mod=0, del=0, deltaTypes=0, deltaMethods=0;
+            Set<String> scopes = new LinkedHashSet<>();
 
             try (GitService gs = GitService.openFromWorkingDir()) {
-                List<DiffEntry> diffs = gs.diffStagedAgainstHead();
-
-                int add=0, mod=0, del=0;
-                Set<String> scopes = new LinkedHashSet<>();
-                int deltaTypes=0, deltaMethods=0;
-
+                List<DiffEntry> diffs = gs.diffStagedAgainstHead();  // may throw for weird states
                 JavaSemanticAnalyzer analyzer = new JavaSemanticAnalyzer();
 
                 for (DiffEntry de : diffs) {
@@ -57,26 +55,32 @@ public class PrepareCommitMsgHookCommand implements Runnable {
                         }
                     }
                 }
-
-                String type = guessType(add, mod, del, scopes);
-                String scope = scopes.isEmpty() ? "core" : String.join(",", scopes);
-                String summary = switch (type) {
-                    case "fix" -> "fix issue in " + scope;
-                    case "docs" -> "update docs";
-                    case "test" -> "update tests";
-                    case "refactor" -> "refactor " + scope;
-                    default -> "add/update " + scope;
-                };
-
-                String header = String.format("%s(%s): %s", type, scope, summary);
-                String trailer = String.format(
-                        "%n%n[sagit] files: +%d ~%d -%d; java delta: types=%d, methods=%d%n",
-                        add, mod, del, deltaTypes, deltaMethods);
-
-                Files.writeString(msgFile, header + trailer);
+            } catch (Exception ignored) {
+                // diff collection can fail on weird states; we'll still prefill a generic header below
             }
-        } catch (Exception ignored) { /* never block commit */ }
+
+            String type = guessType(add, mod, del, scopes);
+            String scope = scopes.isEmpty() ? "core" : String.join(",", scopes);
+            String summary = switch (type) {
+                case "fix" -> "fix issue in " + scope;
+                case "docs" -> "update docs";
+                case "test" -> "update tests";
+                case "refactor" -> "refactor " + scope;
+                default -> "add/update " + scope;
+            };
+
+            String header = String.format("%s(%s): %s", type, scope, summary);
+            String trailer = String.format("%n%n[sagit] files: +%d ~%d -%d; java delta: types=%d, methods=%d%n",
+                    add, mod, del, deltaTypes, deltaMethods);
+
+            // Always write something, even if counts are zero.
+            Files.writeString(msgFile, header + trailer);
+        } catch (Exception e) {
+            // Last-resort: never leave it empty—write a generic header
+            try { Files.writeString(msgFile, "chore: update\n"); } catch (Exception ignored) {}
+        }
     }
+
 
     private boolean hasMeaningfulContent(String text) {
         if (text == null) return false;

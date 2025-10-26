@@ -1,88 +1,146 @@
 package com.sagit.commands;
 
-import java.nio.file.Path;
-
+import com.sagit.SagitCLI;
 import com.sagit.utils.FS;
-
 import picocli.CommandLine;
 
-@CommandLine.Command(name = "setup", description = "Install hooks and prepare .sagit/")
-public class SetupCommand implements Runnable {
-    @Override public void run() {
-        try {
-            Path root = FS.repoRoot();
-            Path sagitDir = FS.ensureDir(root.resolve(".sagit"));
-            Path hooks = FS.ensureDir(root.resolve(".git/hooks"));
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 
-            // Copy current fat jar into .sagit/sagit.jar
-            Path jar = FS.jarSelf();
-            Path targetJar = sagitDir.resolve("sagit.jar");
-            if (jar != null && !jar.toString().isBlank()) {
-                FS.copy(jar, targetJar);
+@CommandLine.Command(
+        name = "setup",
+        description = "Install hooks and copy the runtime jar to .sagit/sagit.jar"
+)
+public class SetupCommand implements Runnable {
+
+    @Override
+    public void run() {
+        try {
+            final Path root = FS.repoRoot();                    // repo top-level
+            final Path gitDir = root.resolve(".git");
+            if (!Files.isDirectory(gitDir)) {
+                throw new IllegalStateException("Not a git repository (no .git folder at " + root + ")");
             }
 
+            // 1) copy the running jar to .sagit/sagit.jar
+            final Path sagitDir = root.resolve(".sagit");
+            Files.createDirectories(sagitDir);
+            final Path destJar = sagitDir.resolve("sagit.jar");
+            final Path srcJar  = runningJar();
+            Files.copy(srcJar, destJar, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+            // 2) write hooks (unix + windows) with logging
+            final Path hooks = gitDir.resolve("hooks");
+            Files.createDirectories(hooks);
+
+            // prepare-commit-msg
             String unixPrepare = """
                     #!/bin/sh
+                    set -e
                     ROOT=$(git rev-parse --show-toplevel)
+                    LOG="$ROOT/.sagit/hook.log"
                     JAR="$ROOT/.sagit/sagit.jar"
-                    exec java -jar "$JAR" hook prepare-commit-msg "$1" "$2" "$3"
+                    mkdir -p "$ROOT/.sagit"
+                    echo "[sagit] $(date) prepare-commit-msg $1 $2 $3" >> "$LOG"
+                    if [ ! -f "$JAR" ]; then echo "[sagit] JAR missing: $JAR" >> "$LOG"; exit 0; fi
+                    exec java -jar "$JAR" hook prepare-commit-msg "$1" "$2" "$3" >> "$LOG" 2>&1
                     """;
-
             String winPrepare = """
                     @echo off
                     for /f "delims=" %%i in ('git rev-parse --show-toplevel') do set ROOT=%%i
+                    set LOG=%ROOT%\\.sagit\\hook.log
                     set JAR=%ROOT%\\.sagit\\sagit.jar
-                    java -jar "%JAR%" hook prepare-commit-msg %1 %2 %3
+                    if not exist "%ROOT%\\.sagit" mkdir "%ROOT%\\.sagit"
+                    echo [sagit] %date% %time% prepare-commit-msg %1 %2 %3 >> "%LOG%"
+                    if not exist "%JAR%" exit /b 0
+                    java -jar "%JAR%" hook prepare-commit-msg %1 %2 %3 >> "%LOG%" 2>&1
                     """;
 
-            String unixCommitMsg = """
+            // commit-msg
+            String unixCommit = """
                     #!/bin/sh
+                    set -e
                     ROOT=$(git rev-parse --show-toplevel)
+                    LOG="$ROOT/.sagit/hook.log"
                     JAR="$ROOT/.sagit/sagit.jar"
-                    exec java -jar "$JAR" hook commit-msg "$1"
+                    mkdir -p "$ROOT/.sagit"
+                    echo "[sagit] $(date) commit-msg $1" >> "$LOG"
+                    if [ ! -f "$JAR" ]; then echo "[sagit] JAR missing: $JAR" >> "$LOG"; exit 0; fi
+                    exec java -jar "$JAR" hook commit-msg "$1" >> "$LOG" 2>&1
                     """;
-            String unixPostCommit = """
-                    #!/bin/sh
-                    ROOT=$(git rev-parse --show-toplevel)
-                    JAR="$ROOT/.sagit/sagit.jar"
-                    exec java -jar "$JAR" hook post-commit
+            String winCommit = """
+                    @echo off
+                    for /f "delims=" %%i in ('git rev-parse --show-toplevel') do set ROOT=%%i
+                    set LOG=%ROOT%\\.sagit\\hook.log
+                    set JAR=%ROOT%\\.sagit\\sagit.jar
+                    if not exist "%ROOT%\\.sagit" mkdir "%ROOT%\\.sagit"
+                    echo [sagit] %date% %time% commit-msg %1 >> "%LOG%"
+                    if not exist "%JAR%" exit /b 0
+                    java -jar "%JAR%" hook commit-msg %1 >> "%LOG%" 2>&1
                     """;
 
-            String winCommitMsg = """
-                    @echo off
-                    for /f "delims=" %%i in ('git rev-parse --show-toplevel') do set ROOT=%%i
-                    set JAR=%ROOT%\\.sagit\\sagit.jar
-                    java -jar "%JAR%" hook commit-msg %1
+            // post-commit
+            String unixPost = """
+                    #!/bin/sh
+                    set -e
+                    ROOT=$(git rev-parse --show-toplevel)
+                    LOG="$ROOT/.sagit/hook.log"
+                    JAR="$ROOT/.sagit/sagit.jar"
+                    mkdir -p "$ROOT/.sagit"
+                    echo "[sagit] $(date) post-commit" >> "$LOG"
+                    if [ ! -f "$JAR" ]; then echo "[sagit] JAR missing: $JAR" >> "$LOG"; exit 0; fi
+                    exec java -jar "$JAR" hook post-commit >> "$LOG" 2>&1
                     """;
-            String winPostCommit = """
+            String winPost = """
                     @echo off
                     for /f "delims=" %%i in ('git rev-parse --show-toplevel') do set ROOT=%%i
+                    set LOG=%ROOT%\\.sagit\\hook.log
                     set JAR=%ROOT%\\.sagit\\sagit.jar
-                    java -jar "%JAR%" hook post-commit
+                    if not exist "%ROOT%\\.sagit" mkdir "%ROOT%\\.sagit"
+                    echo [sagit] %date% %time% post-commit >> "%LOG%"
+                    if not exist "%JAR%" exit /b 0
+                    java -jar "%JAR%" hook post-commit >> "%LOG%" 2>&1
                     """;
 
             FS.writeExecutable(hooks.resolve("prepare-commit-msg"), unixPrepare);
             FS.writeExecutable(hooks.resolve("prepare-commit-msg.bat"), winPrepare);
-            FS.writeExecutable(hooks.resolve("commit-msg"), unixCommitMsg);
-            FS.writeExecutable(hooks.resolve("post-commit"), unixPostCommit);
-            FS.writeExecutable(hooks.resolve("commit-msg.bat"), winCommitMsg);
-            FS.writeExecutable(hooks.resolve("post-commit.bat"), winPostCommit);
+            FS.writeExecutable(hooks.resolve("commit-msg"), unixCommit);
+            FS.writeExecutable(hooks.resolve("commit-msg.bat"), winCommit);
+            FS.writeExecutable(hooks.resolve("post-commit"), unixPost);
+            FS.writeExecutable(hooks.resolve("post-commit.bat"), winPost);
 
-            // .gitignore entry
-            Path gi = root.resolve(".gitignore");
-            String entry = System.lineSeparator() + ".sagit/" + System.lineSeparator();
-            try {
-                if (!java.nio.file.Files.exists(gi)) java.nio.file.Files.createFile(gi);
-                String current = java.nio.file.Files.readString(gi);
-                if (!current.contains(".sagit/")) {
-                    java.nio.file.Files.writeString(gi, current + entry);
-                }
-            } catch (Exception ignored) {}
+            // 3) make sure we ignore internal artifacts
+            final Path gitignore = root.resolve(".gitignore");
+            ensureLine(gitignore, ".sagit/");
+            ensureLine(gitignore, "sagit.jar");
 
             System.out.println("✅ Sagit hooks installed. Jar copied to .sagit/sagit.jar");
         } catch (Exception e) {
             System.err.println("setup failed: " + e.getMessage());
-            System.exit(2);
         }
+    }
+
+    private static void ensureLine(Path file, String line) throws IOException {
+        if (Files.notExists(file)) {
+            Files.writeString(file, line + System.lineSeparator());
+            return;
+        }
+        List<String> all = Files.readAllLines(file);
+        if (all.stream().noneMatch(l -> l.trim().equals(line))) {
+            Files.writeString(file, String.join(System.lineSeparator(), all) + System.lineSeparator() + line + System.lineSeparator());
+        }
+    }
+
+    /** Path to the currently-running jar (the CLI). */
+    private static Path runningJar() throws URISyntaxException {
+        var url = SagitCLI.class.getProtectionDomain().getCodeSource().getLocation();
+        Path p = Path.of(url.toURI());
+        if (Files.isDirectory(p)) {
+            throw new IllegalStateException("Run setup from the built jar (not from classes directory).");
+        }
+        return p;
     }
 }
