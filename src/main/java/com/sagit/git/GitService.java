@@ -19,6 +19,9 @@ import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
+import org.eclipse.jgit.treewalk.AbstractTreeIterator;
+import org.eclipse.jgit.treewalk.EmptyTreeIterator;
+
 
 public class GitService implements AutoCloseable {
     private final Repository repo;
@@ -49,36 +52,55 @@ public class GitService implements AutoCloseable {
         }
     }
 
+
     public List<DiffEntry> diffStagedAgainstHead() throws Exception {
-        ObjectId head = repo.resolve("HEAD^{tree}");
         ObjectId indexTree = writeIndexTree();
 
-        try (ObjectReader reader = repo.newObjectReader()) {
-            CanonicalTreeParser oldTreeIter = new CanonicalTreeParser();
-            CanonicalTreeParser newTreeIter = new CanonicalTreeParser();
-            if (head != null) oldTreeIter.reset(reader, head);
-            newTreeIter.reset(reader, indexTree);
+        try (ObjectReader reader = repo.newObjectReader();
+            DiffFormatter df = new DiffFormatter(new ByteArrayOutputStream())) {
+            df.setRepository(repo);
+            df.setDetectRenames(true);
 
-            try (DiffFormatter df = new DiffFormatter(new ByteArrayOutputStream())) {
-                df.setRepository(repo);
-                df.setDetectRenames(true);
-                return df.scan(oldTreeIter, newTreeIter);
+            AbstractTreeIterator oldIter;
+            ObjectId headTree = repo.resolve("HEAD^{tree}");
+            if (headTree == null) {
+                oldIter = new EmptyTreeIterator();         // ← proper empty repo handler
+            } else {
+                CanonicalTreeParser o = new CanonicalTreeParser();
+                o.reset(reader, headTree);
+                oldIter = o;
             }
+
+            CanonicalTreeParser newIter = new CanonicalTreeParser();
+            newIter.reset(reader, indexTree);
+
+            return df.scan(oldIter, newIter);
         }
     }
+
 
     public List<DiffEntry> diffBetween(ObjectId oldTree, ObjectId newTree) throws IOException {
         try (ObjectReader reader = repo.newObjectReader();
-             DiffFormatter df = new DiffFormatter(new ByteArrayOutputStream())) {
+            DiffFormatter df = new DiffFormatter(new ByteArrayOutputStream())) {
             df.setRepository(repo);
             df.setDetectRenames(true);
-            CanonicalTreeParser a = new CanonicalTreeParser();
+
+            AbstractTreeIterator aIter;
+            if (oldTree == null || ObjectId.zeroId().equals(oldTree)) {
+                aIter = new EmptyTreeIterator();           // ← handle parentless (first) commit
+            } else {
+                CanonicalTreeParser a = new CanonicalTreeParser();
+                a.reset(reader, oldTree);
+                aIter = a;
+            }
+
             CanonicalTreeParser b = new CanonicalTreeParser();
-            a.reset(reader, oldTree);
             b.reset(reader, newTree);
-            return df.scan(a, b);
+
+            return df.scan(aIter, b);
         }
     }
+
 
     public ObjectId writeIndexTree() throws Exception {
         ObjectInserter inserter = repo.newObjectInserter();

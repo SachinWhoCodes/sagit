@@ -26,10 +26,10 @@ public class PostCommitHookCommand implements Runnable {
             if (head == null) return;
 
             RevCommit parent = head.getParentCount() > 0 ? head.getParent(0) : null;
-            ObjectId a = parent == null ? ObjectId.zeroId() : parent.getTree();
-            ObjectId b = head.getTree();
+            ObjectId aTree = (parent == null) ? ObjectId.zeroId() : parent.getTree();  // ← note zeroId
+            ObjectId bTree = head.getTree();
+            List<DiffEntry> diffs = gs.diffBetween(aTree, bTree);
 
-            List<DiffEntry> diffs = gs.diffBetween(a, b);
 
             int filesAdded=0, filesModified=0, filesDeleted=0;
             int deltaTypes=0, deltaMethods=0;
@@ -41,6 +41,7 @@ public class PostCommitHookCommand implements Runnable {
                     case ADD -> filesAdded++;
                     case MODIFY -> filesModified++;
                     case DELETE -> filesDeleted++;
+                    default -> throw new IllegalArgumentException("Unexpected value: " + de.getChangeType());
                 }
                 String path = de.getChangeType() == DiffEntry.ChangeType.DELETE ? de.getOldPath() : de.getNewPath();
                 if (path != null && path.endsWith(".java")) {
