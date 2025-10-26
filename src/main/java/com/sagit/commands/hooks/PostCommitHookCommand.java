@@ -4,7 +4,7 @@ import com.sagit.git.GitService;
 import com.sagit.meta.MetaRecord;
 import com.sagit.meta.MetaStore;
 import com.sagit.semantic.JavaSemanticAnalyzer;
-import com.sagit.utils.FS; // if your helper is in com.sagit.utils.FS, change this import
+import com.sagit.utils.FS; // change to com.sagit.util.FS if that’s your package
 
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.lib.ObjectId;
@@ -18,19 +18,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@CommandLine.Command(
-        name = "post-commit",
-        description = "Append metadata for the latest commit")
+@CommandLine.Command(name = "post-commit", description = "Append metadata for the latest commit")
 public class PostCommitHookCommand implements Runnable {
 
-    @Override
-    public void run() {
-        // Never block the user's commit even if something goes wrong.
+    @Override public void run() {
         try (GitService gs = GitService.openFromWorkingDir()) {
             RevCommit head = gs.headCommit();
-            if (head == null) return;
+            if (head == null) {
+                System.out.println("[sagit] post-commit: no HEAD commit yet");
+                return;
+            }
 
-            // Handle first commit (no parent): pass zeroId so GitService uses EmptyTreeIterator.
+            // Use zeroId to trigger EmptyTreeIterator for first commit
             RevCommit parent = head.getParentCount() > 0 ? head.getParent(0) : null;
             ObjectId aTree = (parent == null) ? ObjectId.zeroId() : parent.getTree();
             ObjectId bTree = head.getTree();
@@ -43,7 +42,7 @@ public class PostCommitHookCommand implements Runnable {
             JavaSemanticAnalyzer analyzer = new JavaSemanticAnalyzer();
 
             for (DiffEntry de : diffs) {
-                // Be generous: treat RENAME/COPY as MODIFY so we never throw or miss metadata.
+                // Never throw on rename/copy – count them as modify
                 switch (de.getChangeType()) {
                     case ADD    -> filesAdded++;
                     case MODIFY -> filesModified++;
@@ -53,18 +52,14 @@ public class PostCommitHookCommand implements Runnable {
                     default     -> filesModified++;
                 }
 
-                String path = de.getChangeType() == DiffEntry.ChangeType.DELETE
-                        ? de.getOldPath()
-                        : de.getNewPath();
+                String path = (de.getChangeType() == DiffEntry.ChangeType.DELETE)
+                        ? de.getOldPath() : de.getNewPath();
 
-                // Java-specific semantic counters
                 if (path != null && path.endsWith(".java")) {
                     byte[] ob = (de.getOldId() != null && de.getOldId().toObjectId() != null)
-                            ? gs.loadBlob(de.getOldId().toObjectId())
-                            : null;
+                            ? gs.loadBlob(de.getOldId().toObjectId()) : null;
                     byte[] nb = (de.getNewId() != null && de.getNewId().toObjectId() != null)
-                            ? gs.loadBlob(de.getNewId().toObjectId())
-                            : null;
+                            ? gs.loadBlob(de.getNewId().toObjectId()) : null;
 
                     var os = analyzer.analyze(ob == null ? "" : new String(ob));
                     var ns = analyzer.analyze(nb == null ? "" : new String(nb));
@@ -83,16 +78,17 @@ public class PostCommitHookCommand implements Runnable {
 
             MetaRecord rec = new MetaRecord();
             rec.commitId  = head.getId().name();
-            rec.timestamp = Instant.now();
+            rec.timestamp = Instant.now().toString();
             rec.summary   = summary;
 
             Path root = FS.repoRoot();
-            Files.createDirectories(root.resolve(".sagit")); // ensure folder for first write
-            MetaStore store = new MetaStore(root.resolve(".sagit/meta.jsonl"));
-            store.append(rec);
+            Files.createDirectories(root.resolve(".sagit"));
+            new MetaStore(root.resolve(".sagit/meta.jsonl")).append(rec);
 
-        } catch (Exception ignored) {
-            // swallow — hooks must never fail the user's commit
+            System.out.println("[sagit] post-commit: metadata appended");
+        } catch (Exception e) {
+            // Log the full stack so it shows up in .sagit/hook.log
+            e.printStackTrace();
         }
     }
 }

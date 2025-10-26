@@ -1,23 +1,26 @@
 package com.sagit.meta;
 
-import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
+import java.nio.file.StandardOpenOption;
 
 public class MetaStore {
     private final Path file;
-    private static final ObjectWriter WRITER = new ObjectMapper().writer();
 
-    public MetaStore(Path file) { this.file = file; }
+    public MetaStore(Path file) {
+        this.file = file;
+    }
 
-    public void append(MetaRecord rec) throws IOException {
+    public void append(MetaRecord rec) throws Exception {
         Files.createDirectories(file.getParent());
-        String json = WRITER.writeValueAsString(rec);
-        Files.writeString(file, json + System.lineSeparator(),
-                java.nio.file.StandardOpenOption.CREATE,
-                java.nio.file.StandardOpenOption.APPEND);
+        String line = rec.toJson() + System.lineSeparator();
+        Files.write(
+                file,
+                line.getBytes(StandardCharsets.UTF_8),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.APPEND,
+                StandardOpenOption.WRITE
+        );
     }
 }
