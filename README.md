@@ -181,3 +181,101 @@ rm -rf /tmp/sagit-demo
 ```
 
 > Keep the `sagit_meta.csv` / `sagit_meta.jsonl` artifacts if you want to show CI/dashboard integration.
+
+
+
+
+SAGIT Demo (Windows, PowerShell) — One-Liner Commands
+
+Run these in Windows PowerShell, pasting one line at a time. Replace the C:\path\to\... JAR path with your actual build.
+
+0) Build SAGIT JAR (in your SAGIT project root)
+mvn -q -DskipTests package
+
+1) Prep: set your JAR path & a friendly editor for Git commits
+$JAR="C:\path\to\sagit\target\sagit-0.1.0-shaded.jar"
+
+git config --global core.editor "notepad"
+
+2) Create a clean demo repo in %TEMP%
+Remove-Item -Recurse -Force "$env:TEMP\sagit-demo" -ErrorAction SilentlyContinue; New-Item -ItemType Directory "$env:TEMP\sagit-demo" | Out-Null; Set-Location "$env:TEMP\sagit-demo"; git init
+
+3) Install SAGIT into this repo
+java -jar "$JAR" setup
+
+4) (Optional) Inspect installed hooks and runtime JAR
+Get-ChildItem .git\hooks | Select-Object Name,Length,LastWriteTime
+
+Get-ChildItem .sagit\sagit.jar
+
+5) Seed config & tests map (for impacted tests demo)
+New-Item -ItemType Directory .sagit -Force | Out-Null; Set-Content .sagit\tests.map '^src/main/java/(.*)\.java$ => src/test/java/$1Test.java'
+
+Set-Content .sagit\config.json '{"commitTemplate": null, "languages": ["java"], "impactedRules": ".sagit/tests.map"}'
+
+6) First commit (first-commit safe; drafted header)
+New-Item -ItemType Directory src\main\java\demo -Force | Out-Null; New-Item -ItemType Directory src\test\java\demo -Force | Out-Null; Set-Content src\main\java\demo\Hello.java 'package demo; public class Hello { public void ping(){} }'; git add -A
+
+git commit
+
+
+Notepad opens with a drafted header (e.g., feat(demo): add/update demo). Save & close.
+
+7) Show last metadata & recent hook logs
+java -jar .sagit\sagit.jar meta last
+
+Get-Content .sagit\hook.log -Tail 20
+
+8) Stage a change and preview semantic diff (before committing)
+Add-Content src\main\java\demo\Hello.java '// tweak 1'; git add -A
+
+java -jar .sagit\sagit.jar diff --semantic
+
+9) Commit & summarize changes since previous
+git commit
+
+
+Save & close Notepad.
+
+java -jar .sagit\sagit.jar describe --since HEAD~1
+
+java -jar .sagit\sagit.jar describe --since HEAD~1 --format json
+
+10) Add a matching test file & demo impacted tests
+Set-Content src\test\java\demo\HelloTest.java 'package demo; public class HelloTest { public void testPing(){} }'; git add -A; git commit -m "test(demo): add HelloTest skeleton"
+
+java -jar .sagit\sagit.jar impacted --since HEAD~1
+
+java -jar .sagit\sagit.jar impacted --since HEAD~1 --only-changed-tests
+
+11) Demonstrate rename/copy handling
+git mv src\main\java\demo\Hello.java src\main\java\demo\Greeting.java; git add -A; git commit
+
+
+Save & close Notepad.
+
+java -jar .sagit\sagit.jar describe --since HEAD~1
+
+12) Demonstrate add & delete in one commit
+Set-Content src\main\java\demo\Foo.java 'public class Foo {}'; git rm src\test\java\demo\HelloTest.java; git add -A; git commit
+
+
+Save & close Notepad.
+
+java -jar .sagit\sagit.jar describe --since HEAD~1
+
+13) Export metadata (for CI / dashboards)
+java -jar .sagit\sagit.jar meta --export csv > sagit_meta.csv
+
+Copy-Item .sagit\meta.jsonl sagit_meta.jsonl; Get-ChildItem sagit_meta.csv, sagit_meta.jsonl | Select-Object Name,Length,LastWriteTime
+
+14) Verify installation health
+java -jar .sagit\sagit.jar verify
+
+15) (Optional) Quick recap checks
+java -jar .sagit\sagit.jar meta last
+
+Get-ChildItem .git\hooks\prepare-commit-msg, .git\hooks\commit-msg, .git\hooks\post-commit | Select-Object Name,Length
+
+16) Cleanup (optional)
+Set-Location $env:TEMP; Remove-Item -Recurse -Force "$env:TEMP\sagit-demo"
