@@ -1,4 +1,4 @@
-# SAGIT Demo: Command-Line Flow (Copy-Paste for README)
+# SAGIT Demo: Command-Line Flow
 
 This section gives you a **zero-conf, live demo** to showcase **SAGIT** in front of judges: install into a fresh repo, auto-draft commit messages, generate semantic diffs, record metadata, summarize changes, list impacted tests, handle renames/add/delete, export data, and verify setup — all **locally** with a single JAR.
 
