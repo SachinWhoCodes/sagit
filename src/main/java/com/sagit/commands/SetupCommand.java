@@ -112,6 +112,39 @@ public class SetupCommand implements Runnable {
             FS.writeExecutable(hooks.resolve("post-commit"), unixPost);
             FS.writeExecutable(hooks.resolve("post-commit.bat"), winPost);
 
+
+
+            // ... inside run() after copying jar and writing hooks ...
+
+            // (NEW) Write default .sagit/tests.map if absent
+            Path rules = sagitDir.resolve("tests.map");
+            if (Files.notExists(rules)) {
+                String tmpl = """
+                        # Sagit test mapping rules (regex => replacement)
+                        # Java default:
+                        ^src/main/java/(.*)\\.java$ => src/test/java/$1Test.java
+
+                        # Examples:
+                        # ^backend/(.*)\\.py$        => tests/$1_test.py
+                        # ^pkg/(.*)\\.go$            => $0_test.go
+                        """;
+                Files.writeString(rules, tmpl);
+            }
+
+            // (NEW) Write minimal .sagit/config.json if absent
+            Path cfg = sagitDir.resolve("config.json");
+            if (Files.notExists(cfg)) {
+                String cfgJson = """
+                        {
+                        "commitTemplate": null,
+                        "impactedRules": ".sagit/tests.map",
+                        "languages": []
+                        }
+                        """;
+                Files.writeString(cfg, cfgJson);
+            }
+
+
             // 3) make sure we ignore internal artifacts
             final Path gitignore = root.resolve(".gitignore");
             ensureLine(gitignore, ".sagit/");

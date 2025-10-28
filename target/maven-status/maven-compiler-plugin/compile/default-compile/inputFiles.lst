@@ -4,10 +4,12 @@
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/ImpactedCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/MetaShowCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/SetupCommand.java
+/home/sachin/Programming/sagit/src/main/java/com/sagit/commands/VerifyCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/hooks/CommitMsgHookCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/hooks/HookCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/hooks/PostCommitHookCommand.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/commands/hooks/PrepareCommitMsgHookCommand.java
+/home/sachin/Programming/sagit/src/main/java/com/sagit/config/Config.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/git/GitService.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/meta/MetaRecord.java
 /home/sachin/Programming/sagit/src/main/java/com/sagit/meta/MetaStore.java

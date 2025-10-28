@@ -1,5 +1,6 @@
 package com.sagit.commands;
 
+import com.sagit.config.Config;
 import com.sagit.git.GitService;
 import com.sagit.utils.FS;
 import org.eclipse.jgit.diff.DiffEntry;
@@ -12,19 +13,19 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.regex.Pattern;
 
-@CommandLine.Command(
-        name = "impacted",
-        description = "List likely impacted tests since a ref"
-)
+@CommandLine.Command(name = "impacted", description = "List likely impacted tests since a ref")
 public class ImpactedCommand implements Runnable {
 
     @CommandLine.Option(names = {"--since"}, defaultValue = "HEAD~1",
             description = "Compare this ref's tree to HEAD (default: ${DEFAULT-VALUE})")
     String since;
 
+    @CommandLine.Option(names = {"--only-changed-tests"}, description = "Only list tests that actually exist")
+    boolean onlyExisting;
+
     @Override public void run() {
         try (GitService gs = GitService.openFromWorkingDir()) {
-            ObjectId toTree = gs.repo().resolve("HEAD^{tree}");
+            ObjectId toTree   = gs.repo().resolve("HEAD^{tree}");
             ObjectId fromTree = gs.repo().resolve(since + "^{tree}");
             if (toTree == null) { System.err.println("impacted: no HEAD"); return; }
             if (fromTree == null) { fromTree = ObjectId.zeroId(); } // first-commit safe
@@ -32,41 +33,32 @@ public class ImpactedCommand implements Runnable {
             List<DiffEntry> diffs = gs.diffBetween(fromTree, toTree);
             Set<String> tests = new LinkedHashSet<>();
 
-            // load .sagit/tests.map (optional)
-            List<Rule> rules = loadRules(FS.repoRoot().resolve(".sagit/tests.map"));
+            Config cfg = Config.load();
+            Path rulesPath = FS.repoRoot().resolve(cfg.impactedRules);
+            List<Rule> rules = loadRules(rulesPath);
 
             for (DiffEntry de : diffs) {
                 String path = de.getChangeType()==DiffEntry.ChangeType.DELETE ? de.getOldPath() : de.getNewPath();
                 if (path == null) continue;
 
                 String mapped = applyRules(path, rules);
+                if (mapped == null) mapped = defaultJavaMap(path);
+
                 if (mapped != null) {
-                    tests.add(mapped);
-                    continue;
+                    if (!onlyExisting || Files.exists(FS.repoRoot().resolve(mapped))) {
+                        tests.add(mapped);
+                    }
                 }
-
-                // fallback heuristic for Java projects
-                String maybe = defaultJavaMap(path);
-                if (maybe != null) tests.add(maybe);
             }
 
-            if (tests.isEmpty()) {
-                System.out.println("(no obvious tests)");
-            } else {
-                tests.forEach(System.out::println);
-            }
+            if (tests.isEmpty()) System.out.println("(no obvious tests)");
+            else tests.forEach(System.out::println);
         } catch (Exception e) {
             System.err.println("impacted failed: " + e.getMessage());
         }
     }
 
     // ---------- rules ----------
-
-    /** rules file format (regex => replacement), lines starting with # are comments.
-     *  Example:
-     *  ^src/main/java/(.*)\\.java$ => src/test/java/$1Test.java
-     *  ^backend/(.*)\\.py$        => tests/$1_test.py
-     */
     private static List<Rule> loadRules(Path file) {
         if (!Files.exists(file)) return List.of();
         List<Rule> out = new ArrayList<>();
@@ -76,9 +68,7 @@ public class ImpactedCommand implements Runnable {
                 if (line.isEmpty() || line.startsWith("#")) continue;
                 String[] parts = line.split("=>", 2);
                 if (parts.length != 2) continue;
-                String regex = parts[0].trim();
-                String repl  = parts[1].trim();
-                out.add(new Rule(Pattern.compile(regex), repl));
+                out.add(new Rule(Pattern.compile(parts[0].trim()), parts[1].trim()));
             }
         } catch (Exception ignored) {}
         return out;
@@ -86,8 +76,8 @@ public class ImpactedCommand implements Runnable {
 
     private static String applyRules(String path, List<Rule> rules) {
         for (Rule r : rules) {
-            String mapped = r.pattern.matcher(path).replaceAll(r.replacement);
-            if (!mapped.equals(path)) return mapped;
+            var m = r.pattern.matcher(path);
+            if (m.find()) return m.replaceAll(r.replacement);
         }
         return null;
     }
